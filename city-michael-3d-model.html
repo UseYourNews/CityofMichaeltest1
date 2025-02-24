@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City of Michael - 3D Interactive Model</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 300px;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading City of Michael 3D Model...</div>
+    <div id="info">
+        <h2>City of Michael</h2>
+        <p>Interactive 3D model of the proposed city on reclaimed land in Lake Michigan.</p>
+        <p>Use mouse to rotate, scroll to zoom, and right-click drag to pan.</p>
+        <p>Click buttons below to explore key features.</p>
+    </div>
+    <div id="controls">
+        <button id="overviewBtn">Overview</button>
+        <button id="undergroundBtn">Underground Systems</button>
+        <button id="urbanBtn">Urban Core</button>
+        <button id="dunesBtn">Eastern Dunes</button>
+        <button id="waterBtn">Water Management</button>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.151.3/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.151.3/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { Water } from 'three/addons/objects/Water.js';
+        import { Sky } from 'three/addons/objects/Sky.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        
+        // Camera setup
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 30000);
+        camera.position.set(0, 2000, 5000);
+        
+        // Renderer setup
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 100;
+        controls.maxDistance = 10000;
+        controls.maxPolarAngle = Math.PI / 2 - 0.1;
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1000, 1000, 1000);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.near = 500;
+        directionalLight.shadow.camera.far = 5000;
+        directionalLight.shadow.camera.left = -2000;
+        directionalLight.shadow.camera.right = 2000;
+        directionalLight.shadow.camera.top = 2000;
+        directionalLight.shadow.camera.bottom = -2000;
+        scene.add(directionalLight);
+
+        // Water setup
+        const waterGeometry = new THREE.PlaneGeometry(30000, 30000);
+        const water = new Water(
+            waterGeometry,
+            {
+                textureWidth: 512,
+                textureHeight: 512,
+                waterNormals: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/waternormals.jpg', function (texture) {
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                }),
+                sunDirection: new THREE.Vector3(),
+                sunColor: 0xffffff,
+                waterColor: 0x001e0f,
+                distortionScale: 3.7,
+                fog: scene.fog !== undefined
+            }
+        );
+        water.rotation.x = -Math.PI / 2;
+        water.position.y = -10;
+        scene.add(water);
+
+        // Sky setup
+        const sky = new Sky();
+        sky.scale.setScalar(10000);
+        scene.add(sky);
+
+        const sun = new THREE.Vector3();
+        const skyUniforms = sky.material.uniforms;
+        skyUniforms['turbidity'].value = 10;
+        skyUniforms['rayleigh'].value = 2;
+        skyUniforms['mieCoefficient'].value = 0.005;
+        skyUniforms['mieDirectionalG'].value = 0.8;
+
+        const parameters = {
+            elevation: 45,
+            azimuth: 180
+        };
+
+        function updateSun() {
+            const phi = THREE.MathUtils.degToRad(90 - parameters.elevation);
+            const theta = THREE.MathUtils.degToRad(parameters.azimuth);
+            sun.setFromSphericalCoords(1, phi, theta);
+            sky.material.uniforms['sunPosition'].value.copy(sun);
+            water.material.uniforms['sunDirection'].value.copy(sun).normalize();
+        }
+        updateSun();
+
+        // Island base creation
+        const islandGroup = new THREE.Group();
+        scene.add(islandGroup);
+
+        // City dimensions
+        const cityWidth = 7000;  // East-west
+        const cityLength = 10000; // North-south
+        
+        // Base island
+        const islandGeometry = new THREE.BoxGeometry(cityWidth, 50, cityLength);
+        const islandMaterial = new THREE.MeshStandardMaterial({ color: 0xd2b48c });
+        const islandMesh = new THREE.Mesh(islandGeometry, islandMaterial);
+        islandMesh.position.y = 20;
+        islandMesh.receiveShadow = true;
+        islandGroup.add(islandMesh);
+
+        // Eastern dunes
+        function createDunes() {
+            const dunesGroup = new THREE.Group();
+            
+            // Main ridge
+            for (let i = 0; i < 20; i++) {
+                const duneHeight = 100 + Math.random() * 150;
+                const duneWidth = 300 + Math.random() * 300;
+                const duneDepth = 500 + Math.random() * 500;
+                
+                const duneGeometry = new THREE.ConeGeometry(duneWidth, duneHeight, 5);
+                const duneMaterial = new THREE.MeshStandardMaterial({ color: 0xe6d59e });
+                const dune = new THREE.Mesh(duneGeometry, duneMaterial);
+                
+                // Position along eastern edge
+                dune.position.x = (cityWidth / 2) - 500 - Math.random() * 500;
+                dune.position.z = -cityLength/2 + (cityLength/20) * i + Math.random() * 500;
+                dune.position.y = duneHeight / 2 + 20;
+                dune.rotation.y = Math.random() * Math.PI;
+                dune.castShadow = true;
+                dune.receiveShadow = true;
+                
+                dunesGroup.add(dune);
+            }
+            
+            // Create some vegetation (trees)
+            for (let i = 0; i < 100; i++) {
+                const treeHeight = 30 + Math.random() * 20;
+                const treeGeometry = new THREE.CylinderGeometry(1, 5, treeHeight);
+                const treeMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+                const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+                
+                // Position trees near dunes
+                tree.position.x = (cityWidth / 2) - 300 - Math.random() * 1000;
+                tree.position.z = -cityLength/2 + Math.random() * cityLength;
+                tree.position.y = treeHeight / 2 + 20;
+                tree.castShadow = true;
+                
+                dunesGroup.add(tree);
+            }
+            
+            return dunesGroup;
+        }
+        
+        const dunesSystem = createDunes();
+        islandGroup.add(dunesSystem);
+
+        // Urban infrastructure
+        function createUrbanCore() {
+            const urbanGroup = new THREE.Group();
+            
+            // Grid system for buildings
+            const gridSize = 200;
+            const rows = Math.floor(cityLength * 0.7 / gridSize);
+            const cols = Math.floor(cityWidth * 0.7 / gridSize);
+            const urbanCenterX = -cityWidth * 0.15;
+            const urbanCenterZ = 0;
+            
+            // Create buildings
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    if (Math.random() > 0.3) { // 70% chance to place a building
+                        // Vary building heights - taller in center
+                        const distanceFromCenter = Math.sqrt(
+                            Math.pow((col - cols/2) * gridSize, 2) + 
+                            Math.pow((row - rows/2) * gridSize, 2)
+                        );
+                        
+                        const maxHeight = 1000;
+                        const heightFactor = 1 - (distanceFromCenter / (Math.max(rows, cols) * gridSize * 0.7));
+                        const buildingHeight = 100 + heightFactor * heightFactor * maxHeight + Math.random() * 200;
+                        
+                        // Building geometry
+                        const buildingWidth = gridSize * 0.8;
+                        const buildingDepth = gridSize * 0.8;
+                        const buildingGeometry = new THREE.BoxGeometry(buildingWidth, buildingHeight, buildingDepth);
+                        
+                        // Vary building colors
+                        const colorValue = 0.6 + Math.random() * 0.3;
+                        const buildingMaterial = new THREE.MeshStandardMaterial({ 
+                            color: new THREE.Color(colorValue, colorValue, colorValue + 0.1),
+                            roughness: 0.7,
+                            metalness: 0.2
+                        });
+                        
+                        const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                        
+                        // Position on grid
+                        building.position.x = urbanCenterX + (col - cols/2) * gridSize;
+                        building.position.z = urbanCenterZ + (row - rows/2) * gridSize;
+                        building.position.y = buildingHeight / 2 + 20;
+                        
+                        building.castShadow = true;
+                        building.receiveShadow = true;
+                        
+                        urbanGroup.add(building);
+                    }
+                }
+            }
+            
+            // Add roads
+            for (let row = 0; row <= rows; row++) {
+                const roadGeometry = new THREE.PlaneGeometry(cols * gridSize, 20);
+                const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                road.rotation.x = -Math.PI / 2;
+                road.position.x = urbanCenterX;
+                road.position.y = 21;
+                road.position.z = urbanCenterZ + (row - rows/2) * gridSize;
+                road.receiveShadow = true;
+                urbanGroup.add(road);
+            }
+            
+            for (let col = 0; col <= cols; col++) {
+                const roadGeometry = new THREE.PlaneGeometry(20, rows * gridSize);
+                const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                const road = new THREE.Mesh(roadGeometry, roadMaterial);
+                road.rotation.x = -Math.PI / 2;
+                road.position.x = urbanCenterX + (col - cols/2) * gridSize;
+                road.position.y = 21;
+                road.position.z = urbanCenterZ;
+                road.receiveShadow = true;
+                urbanGroup.add(road);
+            }
+            
+            return urbanGroup;
+        }
+        
+        const urbanCore = createUrbanCore();
+        islandGroup.add(urbanCore);
+
+        // Underground infrastructure (simplified visualization)
+        function createUndergroundStructure() {
+            const undergroundGroup = new THREE.Group();
+            
+            // Create cutaway view box
+            const cutawayGeometry = new THREE.BoxGeometry(2000, 300, 2000);
+            const cutawayMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x8B4513,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            const cutaway = new THREE.Mesh(cutawayGeometry, cutawayMaterial);
+            cutaway.position.set(-1500, -130, 0);
+            undergroundGroup.add(cutaway);
+            
+            // Transit tunnels
+            const tunnelRadius = 15;
+            const tunnelSegments = 32;
+            
+            // Main tunnels
+            for (let i = 0; i < 3; i++) {
+                const tunnelGeometry = new THREE.CylinderGeometry(tunnelRadius, tunnelRadius, 2000, tunnelSegments);
+                const tunnelMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                const tunnel = new THREE.Mesh(tunnelGeometry, tunnelMaterial);
+                
+                tunnel.rotation.z = Math.PI / 2;
+                tunnel.position.y = -50 - i * 40;
+                tunnel.position.x = -1500;
+                
+                undergroundGroup.add(tunnel);
+            }
+            
+            // Cross tunnels
+            for (let i = 0; i < 5; i++) {
+                const crossTunnelGeometry = new THREE.CylinderGeometry(tunnelRadius, tunnelRadius, 2000, tunnelSegments);
+                const crossTunnelMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                const crossTunnel = new THREE.Mesh(crossTunnelGeometry, crossTunnelMaterial);
+                
+                crossTunnel.position.x = -1500 - 1000 + i * 500;
+                crossTunnel.position.y = -90;
+                
+                undergroundGroup.add(crossTunnel);
+            }
+            
+            // Underground water system (blue cylindrical pipes)
+            const waterPipeGeometry = new THREE.CylinderGeometry(25, 25, 2000, tunnelSegments);
+            const waterPipeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x0077be,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const mainWaterPipe = new THREE.Mesh(waterPipeGeometry, waterPipeMaterial);
+            mainWaterPipe.rotation.z = Math.PI / 2;
+            mainWaterPipe.position.y = -200;
+            mainWaterPipe.position.x = -1500;
+            
+            undergroundGroup.add(mainWaterPipe);
+            
+            // Underground squares/stations
+            for (let i = 0; i < 3; i++) {
+                const stationGeometry = new THREE.BoxGeometry(200, 100, 200);
+                const stationMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xCCCCCC,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const station = new THREE.Mesh(stationGeometry, stationMaterial);
+                station.position.x = -1500 - 800 + i * 800;
+                station.position.y = -100;
+                
+                undergroundGroup.add(station);
+                
+                // Add connection tunnels to stations
+                const connectionGeometry = new THREE.CylinderGeometry(15, 15, 50, 16);
+                const connectionMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
+                
+                const verticalConnection = new THREE.Mesh(connectionGeometry, connectionMaterial);
+                verticalConnection.position.x = station.position.x;
+                verticalConnection.position.y = -25;
+                verticalConnection.position.z = station.position.z;
+                
+                undergroundGroup.add(verticalConnection);
+            }
+            
+            return undergroundGroup;
+        }
+        
+        const undergroundSystem = createUndergroundStructure();
+        undergroundSystem.visible = false;
+        islandGroup.add(undergroundSystem);
+
+        // Water management system visualization
+        function createWaterManagementSystem() {
+            const waterSystemGroup = new THREE.Group();
+            
+            // Create intake structure
+            const intakeGeometry = new THREE.CylinderGeometry(100, 100, 200, 32);
+            const intakeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x0077be,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const northernIntake = new THREE.Mesh(intakeGeometry, intakeMaterial);
+            northernIntake.position.set(0, -100, -5000);
+            waterSystemGroup.add(northernIntake);
+            
+            // Create discharge structure
+            const dischargeGeometry = new THREE.CylinderGeometry(100, 100, 200, 32);
+            const dischargeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x00bfff,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const mainDischarge = new THREE.Mesh(dischargeGeometry, dischargeMaterial);
+            mainDischarge.position.set(2000, -100, 5000);
+            waterSystemGroup.add(mainDischarge);
+            
+            // Underground river/pipe system
+            const points = [
+                new THREE.Vector3(0, -150, -5000),      // Northern intake
+                new THREE.Vector3(0, -350, -2500),      // Diving deeper
+                new THREE.Vector3(-1500, -350, 0),      // Under urban core
+                new THREE.Vector3(-1500, -200, 2500),   // Rising
+                new THREE.Vector3(2000, -150, 5000)     // Discharge
+            ];
+            
+            const pipeGeometry = new THREE.TubeGeometry(
+                new THREE.CatmullRomCurve3(points),
+                100,
+                40,
+                20,
+                false
+            );
+            
+            const pipeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x0077be,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            const pipe = new THREE.Mesh(pipeGeometry, pipeMaterial);
+            waterSystemGroup.add(pipe);
+            
+            // Add flow particles for visualization
+            const particlesGroup = new THREE.Group();
+            waterSystemGroup.add(particlesGroup);
+            
+            for (let i = 0; i < 100; i++) {
+                const particleGeometry = new THREE.SphereGeometry(5, 8, 8);
+                const particleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                // Position along curve
+                const t = i / 100;
+                const point = new THREE.Vector3();
+                point.copy(new THREE.CatmullRomCurve3(points).getPoint(t));
+                particle.position.copy(point);
+                
+                particlesGroup.add(particle);
+                particle.userData = { 
+                    t: t,
+                    speed: 0.001 + Math.random() * 0.002
+                };
+            }
+            
+            waterSystemGroup.userData = { particlesGroup };
+            return waterSystemGroup;
+        }
+        
+        const waterSystem = createWaterManagementSystem();
+        waterSystem.visible = false;
+        islandGroup.add(waterSystem);
+
+        // Handle window resize
+        window.addEventListener('resize', onWindowResize);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Button controls
+        document.getElementById('overviewBtn').addEventListener('click', () => {
+            camera.position.set(0, 2000, 5000);
+            controls.target.set(0, 0, 0);
+            undergroundSystem.visible = false;
+            waterSystem.visible = false;
+            urbanCore.visible = true;
+            dunesSystem.visible = true;
+        });
+
+        document.getElementById('undergroundBtn').addEventListener('click', () => {
+            camera.position.set(-1500, 500, 3000);
+            controls.target.set(-1500, -100, 0);
+            undergroundSystem.visible = true;
+            waterSystem.visible = false;
+            urbanCore.visible = true;
+            dunesSystem.visible = true;
+        });
+
+        document.getElementById('urbanBtn').addEventListener('click', () => {
+            camera.position.set(-1500, 1000, 2000);
+            controls.target.set(-1500, 500, 0);
+            undergroundSystem.visible = false;
+            waterSystem.visible = false;
+            urbanCore.visible = true;
+            dunesSystem.visible = true;
+        });
+
+        document.getElementById('dunesBtn').addEventListener('click', () => {
+            camera.position.set(3000, 400, 0);
+            controls.target.set(cityWidth/2 - 700, 100, 0);
+            undergroundSystem.visible = false;
+            waterSystem.visible = false;
+            urbanCore.visible = true;
+            dunesSystem.visible = true;
+        });
+
+        document.getElementById('waterBtn').addEventListener('click', () => {
+            camera.position.set(0, 1000, 5000);
+            controls.target.set(0, -100, 0);
+            undergroundSystem.visible = false;
+            waterSystem.visible = true;
+            urbanCore.visible = true;
+            dunesSystem.visible = true;
+        });
+
+        // Animation
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            
+            // Animate water
+            water.material.uniforms['time'].value += delta;
+            
+            // Animate water system particles if visible
+            if (waterSystem.visible && waterSystem.userData.particlesGroup) {
+                waterSystem.userData.particlesGroup.children.forEach(particle => {
+                    particle.userData.t += particle.userData.speed;
+                    
+                    if (particle.userData.t > 1) {
+                        particle.userData.t = 0;
+                    }
+                    
+                    const points = [
+                        new THREE.Vector3(0, -150, -5000),
+                        new THREE.Vector3(0, -350, -2500),
+                        new THREE.Vector3(-1500, -350, 0),
+                        new THREE.Vector3(-1500, -200, 2500),
+                        new THREE.Vector3(2000, -150, 5000)
+                    ];
+                    
+                    const curve = new THREE.CatmullRomCurve3(points);
+                    const position = curve.getPoint(particle.userData.t);
+                    particle.position.copy(position);
+                });
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Hide loading screen when everything is ready
+        window.addEventListener('load', () => {
+            document.getElementById('loading').classList.add('hidden');
+            animate();
+        });
+
+        // Start animation loop
+        animate();
+    </script>
+</body>
+</html>
